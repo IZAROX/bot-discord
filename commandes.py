@@ -64,7 +64,7 @@ async def liste(ctx):
     embed.add_field(name="!decompte <delai>", value="Fait un décompte de <delai> secondes.", inline=False)
     embed.add_field(name="!repeter <message>", value="Répète le message donné.", inline=False)
     embed.add_field(name="!ping", value="Vérifie la latence du bot.", inline=False)
-    embed.add_field(name="!liste", value="Affiche cette aide.", inline=False)
+    embed.add_field(name="!help", value="Affiche cette aide.", inline=False)
     embed.add_field(name="!snipe", value="Affiche le dernier message supprimé.", inline=False)
     embed.add_field(name="!clear <nombre>", value="Supprime <nombre> de messages.", inline=False)
     await ctx.send(embed=embed)
@@ -109,6 +109,37 @@ async def snipe(ctx):
         await ctx.send(embed=embed)
     else:
         await ctx.send("Aucun message supprimé trouvé.")
+
+#Commande pour kick un membre avec une raison
+@bot.command()
+@commands.has_permissions(kick_members=True)
+async def kick(ctx, member: discord.Member, *, reason=None):
+    if reason is None:
+        reason = "Aucune raison fournie."
+    kick_embed = discord.Embed(
+        title="🔨 **Kick**",
+        description=f"{member.name} a été kické.",
+        feilds=[
+            discord.EmbedField(name="**Raison:**", value=reason, inline=False),
+            ],
+        color=discord.Color.red() 
+    )
+
+#Commande pour ban un membre avec une raison
+@bot.command()
+@commands.has_permissions(ban_members=True)
+async def ban(ctx, member: discord.Member, *, reason=None):
+    if reason is None:
+        reason = "Aucune raison fournie."
+    ban_embed = discord.Embed(
+        title="🔨 **Ban**",
+        description=f"{member.name} a été banni.",
+        fields=[
+            discord.EmbedField(name="**Raison:**", value=reason, inline=False),
+            ],
+        color=discord.Color.red() 
+    )
+    await ctx.send(embed=ban_embed)
 
 keep_alive()
 bot.run(token)
