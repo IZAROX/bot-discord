@@ -134,18 +134,23 @@ async def kick(ctx, member: discord.Member, *, reason="Aucune raison fournie."):
 #Commande pour ban un membre avec une raison
 @bot.command()
 @commands.has_permissions(ban_members=True)
-async def ban(ctx, member: discord.Member, *, reason=None):
-    await member.ban(reason=reason)
-    if reason is None:
-        reason = "Aucune raison fournie."
-    ban_embed = discord.Embed(
-        title="🔨 **Ban**",
-        description=f"{member.name} a été banni.",
-        color=discord.Color.red() 
-    )
-    ban_embed.add_field(name="**Raison:**", value=reason, inline=False)
-    ban_embed.set_footer(text=f"Demandé par {ctx.author.name}", icon_url=ctx.author.avatar_url)
-    await ctx.send(embed=ban_embed)
+async def ban(ctx, member: discord.Member, *, reason="Aucune raison fournie."):
+    try:
+        await member.ban(reason=reason)
+        print("Membre expulsé avec succès.")
+        ban_embed = discord.Embed(
+            title="🔨 **Bannissement**",
+            description=f"{member.name} a été bannit.",
+            color=discord.Color.red()
+        )
+        ban_embed.add_field(name="**Raison :**", value=reason, inline=False)
+        print("Embed créé avec succès.")
+        await ctx.send(embed=ban_embed)
+        print("Embed envoyé avec succès.")
+    except discord.Forbidden:
+        await ctx.send("Je n'ai pas la permission de bannir ce membre.")
+    except discord.HTTPException as e:
+        await ctx.send(f"Une erreur est survenue lors de l'envoi de l'embed : {e}")
 
 keep_alive()
 bot.run(token)
