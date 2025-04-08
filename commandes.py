@@ -64,7 +64,7 @@ async def liste(ctx):
     embed.add_field(name="!decompte <delai>", value="Fait un décompte de <delai> secondes.", inline=False)
     embed.add_field(name="!repeter <message>", value="Répète le message donné.", inline=False)
     embed.add_field(name="!ping", value="Vérifie la latence du bot.", inline=False)
-    embed.add_field(name="!help", value="Affiche cette aide.", inline=False)
+    embed.add_field(name="!liste", value="Affiche cette aide.", inline=False)
     embed.add_field(name="!snipe", value="Affiche le dernier message supprimé.", inline=False)
     embed.add_field(name="!clear <nombre>", value="Supprime <nombre> de messages.", inline=False)
     await ctx.send(embed=embed)
