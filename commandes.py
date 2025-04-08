@@ -113,18 +113,23 @@ async def snipe(ctx):
 #Commande pour kick un membre avec une raison
 @bot.command()
 @commands.has_permissions(kick_members=True)
-async def kick(ctx, member: discord.Member, *, reason=None):
-    await member.kick(reason=reason)
-    if reason is None:
-        reason = "Aucune raison fournie."
-    kick_embed = discord.Embed(
-        title="🔨 **Kick**",
-        description=f"{member.name} a été kické.",
-        color=discord.Color.red()
-    )
-    kick_embed.add_field(name="**Raison:**", value=reason, inline=False)
-    kick_embed.set_footer(text=f"Demandé par {ctx.author.name}", icon_url=ctx.author.avatar_url)
-    await ctx.send(embed=kick_embed)
+async def kick(ctx, member: discord.Member, *, reason="Aucune raison fournie."):
+    try:
+        await member.kick(reason=reason)
+        print("Membre expulsé avec succès.")
+        kick_embed = discord.Embed(
+            title="🔨 **Expulsion**",
+            description=f"{member.name} a été expulsé.",
+            color=discord.Color.red()
+        )
+        kick_embed.add_field(name="**Raison :**", value=reason, inline=False)
+        print("Embed créé avec succès.")
+        await ctx.send(embed=kick_embed)
+        print("Embed envoyé avec succès.")
+    except discord.Forbidden:
+        await ctx.send("Je n'ai pas la permission d'expulser ce membre.")
+    except discord.HTTPException as e:
+        await ctx.send(f"Une erreur est survenue lors de l'envoi de l'embed : {e}")
 
 #Commande pour ban un membre avec une raison
 @bot.command()
