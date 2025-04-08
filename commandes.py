@@ -114,6 +114,7 @@ async def snipe(ctx):
 @bot.command()
 @commands.has_permissions(kick_members=True)
 async def kick(ctx, member: discord.Member, *, reason=None):
+    await member.kick(reason=reason)
     if reason is None:
         reason = "Aucune raison fournie."
     kick_embed = discord.Embed(
@@ -122,13 +123,15 @@ async def kick(ctx, member: discord.Member, *, reason=None):
         feilds=[
             discord.EmbedField(name="**Raison:**", value=reason, inline=False),
             ],
-        color=discord.Color.red() 
+        color=discord.Color.red()
     )
+    await ctx.send(embed=kick_embed)
 
 #Commande pour ban un membre avec une raison
 @bot.command()
 @commands.has_permissions(ban_members=True)
 async def ban(ctx, member: discord.Member, *, reason=None):
+    await member.ban(reason=reason)
     if reason is None:
         reason = "Aucune raison fournie."
     ban_embed = discord.Embed(
