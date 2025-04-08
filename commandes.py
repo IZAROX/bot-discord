@@ -120,11 +120,10 @@ async def kick(ctx, member: discord.Member, *, reason=None):
     kick_embed = discord.Embed(
         title="🔨 **Kick**",
         description=f"{member.name} a été kické.",
-        feilds=[
-            discord.EmbedField(name="**Raison:**", value=reason, inline=False),
-            ],
         color=discord.Color.red()
     )
+    kick_embed.add_field(name="**Raison:**", value=reason, inline=False)
+    kick_embed.set_footer(text=f"Demandé par {ctx.author.name}", icon_url=ctx.author.avatar_url)
     await ctx.send(embed=kick_embed)
 
 #Commande pour ban un membre avec une raison
@@ -137,11 +136,10 @@ async def ban(ctx, member: discord.Member, *, reason=None):
     ban_embed = discord.Embed(
         title="🔨 **Ban**",
         description=f"{member.name} a été banni.",
-        fields=[
-            discord.EmbedField(name="**Raison:**", value=reason, inline=False),
-            ],
         color=discord.Color.red() 
     )
+    ban_embed.add_field(name="**Raison:**", value=reason, inline=False)
+    ban_embed.set_footer(text=f"Demandé par {ctx.author.name}", icon_url=ctx.author.avatar_url)
     await ctx.send(embed=ban_embed)
 
 keep_alive()
