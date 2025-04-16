@@ -12,12 +12,15 @@ token = os.getenv("DISCORD_TOKEN")
 
 intents = discord.Intents.all()
 
-bot = commands.Bot(command_prefix="!", intents=intents); help_command=(None)
+bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
 
 @bot.event
 async def on_ready():
     print(f"{Fore.GREEN}(ID: {Fore.YELLOW}{bot.user.name}{Fore.GREEN}) est connecté !")
+    #Activité du bot
+    activity = discord.Game(name="!help")
+    await bot.change_presence(activity=activity)
 
 #Hello world
 @bot.command(name="bonjour_monde", aliases=['hw', 'hello'])
@@ -58,7 +61,7 @@ async def on_command_error(ctx, error):
 
 #Commande help avec embed
 @bot.command()
-async def liste(ctx):
+async def help(ctx):
     embed = discord.Embed(title="Aide", description="Voici la liste des commandes disponibles:", color=discord.Color.blue())
     embed.add_field(name="!bonjour_monde", value="Affiche 'Hello World!'", inline=False)
     embed.add_field(name="!decompte <delai>", value="Fait un décompte de <delai> secondes.", inline=False)
