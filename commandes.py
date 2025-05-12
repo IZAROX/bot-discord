@@ -11,6 +11,8 @@ import time
 from datetime import datetime, timedelta
 import json
 import logging
+import requests
+from requests import post
 
 # --------------------------------------------------------  BASE  --------------------------------------------------------
 
@@ -68,6 +70,38 @@ class ColorFormatter(logging.Formatter):
         color = self.COLORS.get(record.levelno, "")
         message = super().format(record)
         return f"{color}{message}{Style.RESET_ALL}"
+
+class SolarWindsHandler(logging.Handler):
+    def __init__(self, token):
+        super().__init__()
+        self.token = token
+        self.url = "https://ingest.eu-01.cloud.solarwinds.com/v1/logs"  # Confirme dans tes docs
+
+    def emit(self, record):
+        log_entry = self.format(record)
+        payload = {
+            "message": log_entry,
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json"
+        }
+
+        try:
+            requests.post(self.url, headers=headers, json=payload, timeout=5)
+        except Exception as e:
+            # Évite les erreurs en boucle si SolarWinds tombe
+            print(f"Erreur lors de l'envoi du log à SolarWinds : {e}")
+
+# Handler pour SolarWinds
+solarwinds_token = os.getenv("SOLARWINDS_TOKEN")
+solarwinds_handler = SolarWindsHandler(solarwinds_token)
+solarwinds_handler.setLevel(logging.INFO)  # Tu peux ajuster à WARNING si tu veux moins de bruit
+solarwinds_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+logging.getLogger().addHandler(solarwinds_handler)
+
 
 # Handler pour la console (coloré)
 console_handler = logging.StreamHandler()
