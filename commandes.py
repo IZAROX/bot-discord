@@ -53,7 +53,7 @@ def load_messages():
 # Fonction pour sauvegarder les messages dans le fichier JSON
 def save_messages(data):
     with open(FILE_PATH, 'w') as file:
-        json.dump(data, file, indent=4)
+        json.dump(data, file, indent=4, ensure_ascii=False)
 
 # Dictionnaire des messages supprimés : {channel_id: [{"content": ..., "author": ..., "time": ...}]}
 sniped_messages = load_messages()
@@ -99,7 +99,7 @@ class SolarWindsHandler(logging.Handler):
 
 
         try:
-            response = requests.post(self.url, headers=headers, json=payload, timeout=5)
+            response = requests.post(self.url, headers=headers, data=json.dumps(payload, ensure_ascii=False).encode('utf-8'), timeout=5)
             response.raise_for_status()
         except requests.RequestException as e:
             print(f"[SolarWinds] Échec d'envoi du log : {e}")
