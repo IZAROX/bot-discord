@@ -19,15 +19,20 @@ from requests import post
 load_dotenv()
 token = os.getenv("DISCORD_TOKEN")
 
-
 intents = discord.Intents.all()
 init(autoreset=True)
 
+# Ensemble temporaire pour stocker les IDs des messages supprimés par le bot
+bot_deleted_messages = set()
 bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 bot.help_command = None
 
 OWNER_ID = 1265356662907076681
 WHITELIST_IDS = [OWNER_ID, 1122259572267155577]  # Ajoute ici les IDs autorisés
+
+async def delete_command_message(msg):
+    bot_deleted_messages.add(msg.id)
+    await msg.delete()
 
 # -----------------------------------------------------  CONFIG DU SNIPE  ------------------------------------------------------
 
@@ -48,12 +53,10 @@ def load_messages():
 # Fonction pour sauvegarder les messages dans le fichier JSON
 def save_messages(data):
     with open(FILE_PATH, 'w') as file:
-        json.dump(data, file)
+        json.dump(data, file, indent=4)
 
 # Dictionnaire des messages supprimés : {channel_id: [{"content": ..., "author": ..., "time": ...}]}
 sniped_messages = load_messages()
-
-# -----------------------------------------------------  CONFIG DES LOGS  ------------------------------------------------------
 
 # -----------------------------------------------------  CONFIG DES LOGS  ------------------------------------------------------
 
@@ -75,48 +78,56 @@ class SolarWindsHandler(logging.Handler):
     def __init__(self, token):
         super().__init__()
         self.token = token
-        self.url = "https://ingest.eu-01.cloud.solarwinds.com/v1/logs"  # Confirme dans tes docs
+        self.url = "https://logs.collector.eu-01.cloud.solarwinds.com/v1/logs"
 
     def emit(self, record):
         log_entry = self.format(record)
+
+        # Contenu réduit
         payload = {
-            "message": log_entry,
-            "timestamp": datetime.utcnow().isoformat() + "Z"
+            "logs": [
+                {
+                    "message": log_entry
+                }
+            ]
         }
 
         headers = {
-            "Authorization": f"Bearer {self.token}",
+            "Authorization": f"Bearer Er07FY34A-m1-MQVv4EaD8WzncpuQeuVDKjMGMnKDH4fX3N9rZyC7lHQXYMX2rdT8UUXSLo",
             "Content-Type": "application/json"
         }
 
+
         try:
-            requests.post(self.url, headers=headers, json=payload, timeout=5)
-        except Exception as e:
-            # Évite les erreurs en boucle si SolarWinds tombe
-            print(f"Erreur lors de l'envoi du log à SolarWinds : {e}")
-
-# Handler pour SolarWinds
-solarwinds_token = os.getenv("SOLARWINDS_TOKEN")
-solarwinds_handler = SolarWindsHandler(solarwinds_token)
-solarwinds_handler.setLevel(logging.INFO)  # Tu peux ajuster à WARNING si tu veux moins de bruit
-solarwinds_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
-logging.getLogger().addHandler(solarwinds_handler)
-
-
-# Handler pour la console (coloré)
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.DEBUG)  # Niveau de log pour la console
-console_formatter = ColorFormatter("%(asctime)s - %(levelname)s - %(message)s")
-console_handler.setFormatter(console_formatter)
-
-# Handler pour le fichier (sans couleurs)
-file_handler = logging.FileHandler("bot_logs.log", encoding="utf-8")
-file_handler.setLevel(logging.DEBUG)  # Modifié pour enregistrer tous les logs à partir de DEBUG
-file_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-file_handler.setFormatter(file_formatter)
+            response = requests.post(self.url, headers=headers, json=payload, timeout=5)
+            response.raise_for_status()
+        except requests.RequestException as e:
+            print(f"[SolarWinds] Échec d'envoi du log : {e}")
 
 # Configuration du logger global
-logging.basicConfig(level=logging.DEBUG, handlers=[console_handler, file_handler])
+logger = logging.getLogger("discord_bot")
+logger.setLevel(logging.DEBUG)
+
+# Supprimer les handlers existants si redémarrage
+logger.handlers.clear()
+
+# Console (colorée)
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.DEBUG)
+console_handler.setFormatter(ColorFormatter("%(asctime)s - %(levelname)s - %(message)s"))
+logger.addHandler(console_handler)
+
+# Fichier log
+file_handler = logging.FileHandler("bot_logs.log", encoding="utf-8")
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+logger.addHandler(file_handler)
+
+# SolarWinds
+solarwinds_handler = SolarWindsHandler(os.getenv("SOLARWINDS_TOKEN"))
+solarwinds_handler.setLevel(logging.INFO)
+solarwinds_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+logger.addHandler(solarwinds_handler)
 
 # -----------------------------------------------------  NETTOYAGE LOGS  -----------------------------------------------------
 
@@ -178,23 +189,38 @@ async def on_command_error(ctx, error):
     else:
         logging.error(f"Erreur dans la commande de {ctx.author}: {error}")  # Log d'erreur
         await ctx.send(f"Une erreur s'est produite: {error}")
+
 @bot.event
 async def on_message_delete(message):
     if message.author.bot or not message.content:
         return
 
-    # Enregistrer le message supprimé avec son timestamp
-    channel_id = str(message.channel.id)
-    if channel_id not in sniped_messages:
-        sniped_messages[channel_id] = []
+    if message.id in bot_deleted_messages:
+        bot_deleted_messages.discard(message.id)
+        return
 
-    sniped_messages[channel_id].append({
+    guild_id = str(message.guild.id)
+    channel_id = str(message.channel.id)
+
+    if guild_id not in sniped_messages:
+        sniped_messages[guild_id] = {}
+
+    if channel_id not in sniped_messages[guild_id]:
+        sniped_messages[guild_id][channel_id] = []
+
+    sniped_messages[guild_id][channel_id].insert(0, {
         "content": message.content,
-        "author": message.author.name,
+        "author": str(message.author),
         "time": time.time()
     })
 
-    save_messages(sniped_messages)  # Sauvegarder les messages après chaque suppression
+    # Ne garde que les 10 derniers
+    sniped_messages[guild_id][channel_id] = sniped_messages[guild_id][channel_id][:10]
+
+    save_messages(sniped_messages)
+    logger.info(f"Message supprimé dans {message.channel.name} par {message.author}: {message.content}")
+
+
 
 # Lorsque le bot reçoit un message
 @bot.event
@@ -208,26 +234,33 @@ async def on_message(message):
 #Hello world
 @bot.command(name="bonjour_monde", aliases=['hw', 'hello'])
 async def hello_world(context):
-    logging.info(f"Commande !hello_world exécutée par {context.author}")  # Log de la commande
+    logger.info(f"Commande !hello_world exécutée par {context.author}")  # Log de la commande
     await context.send("Hello World!")
 
 # ---------------------------------
 
-#Faire un décompte
+#Faire un décompte secondes par secondes
 @bot.command()
 async def decompte(context, delai: int):
-    logging.info(f"Commande !decompte exécutée par {context.author}")  # Log de la commande
+    await delete_command_message(context.message)
+    if delai < 1:
+        await context.send("Le délai doit être supérieur à 0.")
+        return
+    logger.info(f"Commande !decompte exécutée par {context.author}")  # Log de la commande
     await context.send("Départ dans...")
     for i in range(delai, 0, -1):
         await context.send(i)
-    await context.send("C'est parti!")
+        await asyncio.sleep(1)  # Pause de 1 seconde entre chaque message
+    await context.send("GO! 🚀")
 
 # ---------------------------------
 
 #Répéter un message
 @bot.command()
 async def repeter(context, *, message):
-    logging.info(f"Commande !repeter exécutée par {context.author}")  # Log de la commande
+    await delete_command_message(context.message)
+  # Supprime le message de commande
+    logger.info(f"Commande !repeter exécutée par {context.author}")  # Log de la commande
     await context.send(message)
 
 # ---------------------------------
@@ -236,8 +269,9 @@ async def repeter(context, *, message):
 @bot.command()
 @commands.is_owner()
 async def restart(ctx):
-    logging.info(f"Le bot est redémarré par {ctx.author}")
+    logger.info(f"Le bot est redémarré par {ctx.author}")
     await ctx.send("♻️ Redémarrage du bot...")
+    await asyncio.sleep(1)  # Pause de 2 secondes avant le redémarrage
 
     # Nettoyage complet du logging pour éviter les handlers persistants
     for handler in logging.root.handlers[:]:
@@ -249,29 +283,38 @@ async def restart(ctx):
 
 # ---------------------------------
 
-#Commande de spam
+#Commande de spam avec le message au choix
 @bot.command()
-async def spam(ctx, member: discord.Member, count: int = 5):
-    logging.info(f"Commande !spam exécutée par {ctx.author} sur {member} avec {count} messages")
-        # Autorisation : owner ou whitelist
+async def spam(ctx, member: discord.Member, count: int = 5, *, message: str = None):
+    logger.info(f"Commande !spam exécutée par {ctx.author} sur {member} avec {count} messages")
+    
+    # Autorisation : owner ou whitelist
     if ctx.author.id not in WHITELIST_IDS:
         await ctx.send("🚫 Tu n'as pas la permission d'utiliser cette commande.")
         return
-    
-    await ctx.message.delete()  # Supprime le message de commande
-    # Ne pas spammer l'owner du bot
+
+    await delete_command_message(ctx.message)  # Supprime le message de commande
+
     if member.id == OWNER_ID:
         await ctx.send("Tu ne peux pas spammer le boss du bot 😎 !")
         return
-    
+
     if count > 20:
         await ctx.send("Calme-toi 😅 ! Max 20 messages pour éviter les abus.")
         return
-    
+
+    if not message:
+        message = f"Hey {member.mention} 👀, c'est le spam n°{{}} !"
+
     try:
         for i in range(count):
-            await member.send(f"Hey {member.mention} 👀, c'est le spam n°{i + 1} !")
-            await asyncio.sleep(0.25)  # Pause de 0.25 secondes entre chaque DM pour éviter les abus
+            # Si message contient {} (comme une template), on remplit le numéro
+            if "{}" in message:
+                final_msg = message.format(i + 1)
+            else:
+                final_msg = message
+            await member.send(final_msg)
+            await asyncio.sleep(0.25)  # Petite pause
         await ctx.send(f"Je viens de DM {count} fois {member.name} 😎")
     except discord.Forbidden:
         await ctx.send("Je ne peux pas lui envoyer de DM. Peut-être qu'il les a fermés ?")
@@ -281,7 +324,7 @@ async def spam(ctx, member: discord.Member, count: int = 5):
 #Commande pour le ping
 @bot.command()
 async def ping(ctx):
-    logging.info(f"Commande !ping exécutée par {ctx.author}")  # Log de la commande
+    logger.info(f"Commande !ping exécutée par {ctx.author}")  # Log de la commande
     await ctx.send(f"🏓 Pong! Latence: {round(bot.latency * 1000)}ms")
 
 # ---------------------------------
@@ -289,14 +332,21 @@ async def ping(ctx):
 #Commande help avec embed
 @bot.command()
 async def help(ctx):
-    embed = discord.Embed(title="Aide", description="Voici la liste des commandes disponibles:", color=discord.Color.blue())
-    embed.add_field(name="!bonjour_monde", value="Affiche 'Hello World!'", inline=False)
+    logger.info(f"Commande !help exécutée par {ctx.author}")  # Log de la commande
+    embed = discord.Embed(title="Aide", description="Voici la liste des commandes disponibles:", color=discord.Color.from_rgb(0, 204, 204))
+    embed.add_field(name="!hw", value="Affiche 'Hello World!'", inline=False)
     embed.add_field(name="!decompte <delai>", value="Fait un décompte de <delai> secondes.", inline=False)
     embed.add_field(name="!repeter <message>", value="Répète le message donné.", inline=False)
     embed.add_field(name="!ping", value="Vérifie la latence du bot.", inline=False)
     embed.add_field(name="!help", value="Affiche cette aide.", inline=False)
     embed.add_field(name="!snipe", value="Affiche le dernier message supprimé.", inline=False)
     embed.add_field(name="!clear <nombre>", value="Supprime <nombre> de messages.", inline=False)
+    embed.add_field(name="!kick <membre> [raison]", value="Expulse un membre avec une raison.", inline=False)
+    embed.add_field(name="!ban <membre> [raison]", value="Bannit un membre avec une raison.", inline=False)
+    embed.add_field(name="!info", value="Affiche les informations sur le bot.", inline=False)
+    embed.set_footer(text="Bot développé par IZAROX")
+    embed.set_thumbnail(url=bot.user.avatar.url)
+    embed.set_author(name=bot.user.name, icon_url=bot.user.avatar.url)
     await ctx.send(embed=embed)
 
 # ---------------------------------
@@ -305,7 +355,8 @@ async def help(ctx):
 @bot.command()
 @commands.is_owner()
 async def stop(ctx):
-    logging.info(f"Le bot est arrêté par {ctx.author}")  # Log de l'arrêt
+    await delete_command_message(ctx.message)  # Supprime le message de commande
+    logger.info(f"Le bot est arrêté par {ctx.author}")  # Log de l'arrêt
     await ctx.send("💤 Arrêt du bot...")
     await bot.close()
 
@@ -315,9 +366,16 @@ async def stop(ctx):
 @bot.command()
 @commands.has_permissions(manage_messages=True)
 async def clear(ctx, amount: int):
-    logging.info(f"Commande !clear exécutée par {ctx.author} pour supprimer {amount} messages")  # Log de la commande
+    logger.info(f"Commande !clear exécutée par {ctx.author} pour supprimer {amount} messages")
+    # Supprimer les messages, y compris la commande elle-même
     deleted = await ctx.channel.purge(limit=amount + 1)
+
+    # Ajouter les IDs des messages supprimés à la liste temporaire
+    for msg in deleted:
+        bot_deleted_messages.add(msg.id)
+
     await ctx.send(f"🗑️ {len(deleted) - 1} messages supprimés.", delete_after=5)
+
 
 # ---------------------------------
 
@@ -325,33 +383,35 @@ async def clear(ctx, amount: int):
 @bot.command()
 @commands.has_permissions(manage_messages=True)
 async def snipe(ctx):
-    logging.info(f"Commande !snipe exécutée par {ctx.author}")
+    await delete_command_message(ctx.message)
+    logger.info(f"Commande !snipe exécutée par {ctx.author}")
+
+    guild_id = str(ctx.guild.id)
     channel_id = str(ctx.channel.id)
-    data = sniped_messages.get(channel_id)
+
+    data = sniped_messages.get(guild_id, {}).get(channel_id)
 
     if not data:
         await ctx.send("Aucun message supprimé trouvé.")
         return
 
-    # Nettoyage des messages expirés (plus de 5 jours)
+    # Nettoyage des messages expirés
     current_time = time.time()
-    sniped_messages[channel_id] = [
-        msg for msg in data if current_time - msg["time"] <= 432000  # 5 jours en secondes
+    sniped_messages[guild_id][channel_id] = [
+        msg for msg in data if current_time - msg["time"] <= 432000
     ]
 
-    # Sauvegarder les messages après nettoyage
     save_messages(sniped_messages)
 
-    if not sniped_messages[channel_id]:
+    if not sniped_messages[guild_id][channel_id]:
         await ctx.send("Tous les messages supprimés ont expiré.")
         return
 
-    # Affichage du dernier message supprimé
-    last_message = sniped_messages[channel_id][-1]
+    last_message = sniped_messages[guild_id][channel_id][0]
     embed = discord.Embed(
         title="❌ __**Dernier message supprimé:**__",
         description=last_message["content"],
-        color=discord.Color.red()
+        color=discord.Color.orange()
     )
     embed.add_field(name="**Auteur**:", value=last_message["author"], inline=False)
     await ctx.send(embed=embed)
@@ -362,7 +422,7 @@ async def snipe(ctx):
 @bot.command()
 @commands.has_permissions(kick_members=True)
 async def kick(ctx, member: discord.Member, *, reason="Aucune raison fournie."):
-    logging.info(f"Commande !kick exécutée par {ctx.author} sur {member} avec raison: {reason}")
+    logger.info(f"Commande !kick exécutée par {ctx.author} sur {member} avec raison: {reason}")
     try:
         await member.kick(reason=reason)
         print("Membre expulsé avec succès.")
@@ -386,7 +446,7 @@ async def kick(ctx, member: discord.Member, *, reason="Aucune raison fournie."):
 @bot.command()
 @commands.has_permissions(ban_members=True)
 async def ban(ctx, member: discord.Member, *, reason="Aucune raison fournie."):
-    logging.info(f"Commande !ban exécutée par {ctx.author} sur {member} avec raison: {reason}")
+    logger.info(f"Commande !ban exécutée par {ctx.author} sur {member} avec raison: {reason}")
     try:
         await member.ban(reason=reason)
         print("Membre expulsé avec succès.")
@@ -404,6 +464,25 @@ async def ban(ctx, member: discord.Member, *, reason="Aucune raison fournie."):
     except discord.HTTPException as e:
         await ctx.send(f"Une erreur est survenue lors de l'envoi de l'embed : {e}")
 
+# ---------------------------------
+
+#Commande pour afficher les infos de l'owner en embed
+@bot.command()
+async def info(ctx):
+    logger.info(f"Commande !info exécutée par {ctx.author}")
+    embed = discord.Embed(
+        title="👤 **Informations sur le Bot**",
+        description="Voici les informations sur le bot.",
+        color=discord.Color.pink()
+    )
+    embed.add_field(name="**Nom :**", value=bot.user.name, inline=False)
+    embed.add_field(name="**ID :**", value=bot.user.id, inline=False)
+    embed.add_field(name="**Créateur :**", value="<@1265356662907076681>", inline=False)
+    embed.add_field(name="**Version :**", value="1.1.0", inline=False)
+    embed.add_field(name="**Serveurs :**", value=len(bot.guilds), inline=False)
+    embed.set_thumbnail(url=bot.user.avatar.url)
+    embed.set_footer(text="Bot développé par IZAROX")
+    await ctx.send(embed=embed)
 # --------------------------------------------------------  FIN  --------------------------------------------------------
 
 keep_alive()
