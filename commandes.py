@@ -177,7 +177,7 @@ nettoyer_logs()
 async def on_ready():
     print(f"{Fore.GREEN}(ID: {Fore.YELLOW}{bot.user.name}{Fore.GREEN}) est connecté !")
     #Activité du bot
-    activity = discord.Game(name="!help")
+    activity = discord.Game(name="!help | V1.1.0")
     await bot.change_presence(activity=activity)
 
 # Exemple d'erreur de commande
