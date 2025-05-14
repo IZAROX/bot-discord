@@ -13,11 +13,13 @@ import json
 import logging
 import requests
 from requests import post
+from config import BOT_VERSION
 
 # --------------------------------------------------------  BASE  --------------------------------------------------------
 
 load_dotenv()
 token = os.getenv("DISCORD_TOKEN")
+solar = os.getenv("SOLARWINDS_TOKEN")
 
 intents = discord.Intents.all()
 init(autoreset=True)
@@ -93,7 +95,7 @@ class SolarWindsHandler(logging.Handler):
         }
 
         headers = {
-            "Authorization": f"Bearer Er07FY34A-m1-MQVv4EaD8WzncpuQeuVDKjMGMnKDH4fX3N9rZyC7lHQXYMX2rdT8UUXSLo",
+            "Authorization": f"Bearer {solar}",
             "Content-Type": "application/json"
         }
 
@@ -177,7 +179,7 @@ nettoyer_logs()
 async def on_ready():
     print(f"{Fore.GREEN}(ID: {Fore.YELLOW}{bot.user.name}{Fore.GREEN}) est connecté !")
     #Activité du bot
-    activity = discord.Game(name="!help | V1.1.0")
+    activity = discord.Game(name=f"!help | V{BOT_VERSION}")
     await bot.change_presence(activity=activity)
 
 # Exemple d'erreur de commande
@@ -228,6 +230,14 @@ async def on_message(message):
     if message.author == bot.user:
         return  # Ignore les messages envoyés par le bot lui-même
     await bot.process_commands(message)
+    
+@bot.event
+async def on_guild_join(guild):
+    logger.info(f"Rejoint un nouveau serveur : {guild.name} ({guild.id})")
+
+@bot.event
+async def on_guild_remove(guild):
+    logger.info(f"Retiré du serveur : {guild.name} ({guild.id})")
 
 # --------------------------------------------------------  COMMANDES  --------------------------------------------------------
 
@@ -309,8 +319,10 @@ async def spam(ctx, member: discord.Member, count: int = 5, *, message: str = No
     try:
         for i in range(count):
             # Si message contient {} (comme une template), on remplit le numéro
-            if "{}" in message:
+            try:
                 final_msg = message.format(i + 1)
+            except IndexError:
+                final_msg = message
             else:
                 final_msg = message
             await member.send(final_msg)
@@ -344,7 +356,26 @@ async def help(ctx):
     embed.add_field(name="!kick <membre> [raison]", value="Expulse un membre avec une raison.", inline=False)
     embed.add_field(name="!ban <membre> [raison]", value="Bannit un membre avec une raison.", inline=False)
     embed.add_field(name="!info", value="Affiche les informations sur le bot.", inline=False)
-    embed.set_footer(text="Bot développé par IZAROX")
+    embed.add_field(name="!version", value="Affiche la version du bot.", inline=False)
+    embed.add_field(name="!ahelp", value="les commandes admin", inline=False)
+    embed.set_footer(text=f"Bot développé par IZAROX | V{BOT_VERSION}")
+    embed.set_thumbnail(url=bot.user.avatar.url)
+    embed.set_author(name=bot.user.name, icon_url=bot.user.avatar.url)
+    await ctx.send(embed=embed)
+
+# ---------------------------------
+
+@bot.command()
+async def ahelp(ctx):
+    logger.info(f"Commande !ahelp exécutée par {ctx.author}")
+    if ctx.author.id not in WHITELIST_IDS:
+        await ctx.send("🚫 Tu n'as pas la permission d'utiliser cette commande.")
+        return
+    await delete_command_message(ctx.message)  # Supprime le message de commande
+    embed = discord.Embed(title="Aide Admin", description="Voici la liste des commandes administratives disponibles:", color=discord.Color.brand_red())
+    embed.add_field(name="!spam <membre> <nombre> [message]", value="Envoie un message à un membre plusieurs fois.", inline=False)
+    embed.add_field(name="D'autres commandes sont a venir.", value="Si vous avez des suggestions venz DM izar0x", inline=False)
+    embed.set_footer(text=f"Bot développé par IZAROX | V{BOT_VERSION}")
     embed.set_thumbnail(url=bot.user.avatar.url)
     embed.set_author(name=bot.user.name, icon_url=bot.user.avatar.url)
     await ctx.send(embed=embed)
@@ -425,7 +456,6 @@ async def kick(ctx, member: discord.Member, *, reason="Aucune raison fournie."):
     logger.info(f"Commande !kick exécutée par {ctx.author} sur {member} avec raison: {reason}")
     try:
         await member.kick(reason=reason)
-        print("Membre expulsé avec succès.")
         kick_embed = discord.Embed(
             title="🔨 **Expulsion**",
             description=f"{member.name} a été expulsé.",
@@ -449,7 +479,6 @@ async def ban(ctx, member: discord.Member, *, reason="Aucune raison fournie."):
     logger.info(f"Commande !ban exécutée par {ctx.author} sur {member} avec raison: {reason}")
     try:
         await member.ban(reason=reason)
-        print("Membre expulsé avec succès.")
         ban_embed = discord.Embed(
             title="🔨 **Bannissement**",
             description=f"{member.name} a été bannit.",
@@ -478,11 +507,25 @@ async def info(ctx):
     embed.add_field(name="**Nom :**", value=bot.user.name, inline=False)
     embed.add_field(name="**ID :**", value=bot.user.id, inline=False)
     embed.add_field(name="**Créateur :**", value="<@1265356662907076681>", inline=False)
-    embed.add_field(name="**Version :**", value="1.1.0", inline=False)
+    embed.add_field(name="**Version :**", value=f"{BOT_VERSION}", inline=False)
     embed.add_field(name="**Serveurs :**", value=len(bot.guilds), inline=False)
     embed.set_thumbnail(url=bot.user.avatar.url)
     embed.set_footer(text="Bot développé par IZAROX")
     await ctx.send(embed=embed)
+
+# ---------------------------------
+
+@bot.command()
+async def version(ctx):
+    logger.info(f"Commande !version exécutée par {ctx.author}")
+    embed = discord.Embed(
+        title="🔧 **Version du Bot**",
+        description=f"📌 Version actuelle : {BOT_VERSION}",
+        color=discord.Color.green()
+    )
+    embed.set_footer(text="Bot développé par IZAROX")
+    await ctx.send(embed=embed)
+
 # --------------------------------------------------------  FIN  --------------------------------------------------------
 
 keep_alive()
