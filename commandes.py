@@ -186,10 +186,10 @@ async def on_ready():
 @bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
-        logging.warning(f"Commande inconnue utilisée par {ctx.author}: {ctx.message.content}")  # Log d'avertissement
+        logger.warning(f"Commande inconnue utilisée par {ctx.author}: {ctx.message.content}")  # Log d'avertissement
         await ctx.send("❌ Commande inconnue.")
     else:
-        logging.error(f"Erreur dans la commande de {ctx.author}: {error}")  # Log d'erreur
+        logger.error(f"Erreur dans la commande de {ctx.author}: {error}")  # Log d'erreur
         await ctx.send(f"Une erreur s'est produite: {error}")
 
 @bot.event
